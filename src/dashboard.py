@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 # ── PAGE CONFIG ──────────────────────────────────────────────
 st.set_page_config(
     page_title="Shopping Trends Analytics",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -273,16 +273,16 @@ if uploaded is not None:
         st.stop()
     _missing = validate_columns(_raw)
     if _missing:
-        st.error("⚠️ File chưa đúng định dạng — thiếu các cột bắt buộc: "
+        st.error(" File chưa đúng định dạng — thiếu các cột bắt buộc: "
                  + ", ".join(_missing))
         st.info("Vui lòng tải lên file CSV có cùng cấu trúc với bộ dữ liệu Shopping Trends "
                 "(gồm các cột: Age, Gender, Category, Purchase Amount (USD), Season, ...).")
         st.stop()
     df_all = process_df(_raw)
-    source_name = f"📤 {uploaded.name}  ({len(df_all):,} dòng)"
+    source_name = f" {uploaded.name}  ({len(df_all):,} dòng)"
 elif use_sample and os.path.exists(DATA_PATH):
     df_all = load_sample()
-    source_name = f"📁 Dữ liệu mẫu  ({len(df_all):,} dòng)"
+    source_name = f" Dữ liệu mẫu  ({len(df_all):,} dòng)"
 else:
     # Màn hình chào — chưa có dữ liệu thì chưa hiện dashboard
     st.markdown(f"""
@@ -290,7 +290,7 @@ else:
                 background:{CARD_BG};border:1px solid {BORDER};
                 border-top:4px solid {P1};border-radius:16px;padding:48px 40px;'>
       <div style='font-size:30px;font-weight:700;color:{TEXT};margin-bottom:12px;'>
-        📊 Shopping Trends Analytics
+         Shopping Trends Analytics
       </div>
       <div style='font-size:15px;color:{MUTED};line-height:1.7;margin-bottom:8px;'>
         Chào mừng bạn! Để bắt đầu phân tích, hãy chọn một nguồn dữ liệu ở thanh bên trái:
