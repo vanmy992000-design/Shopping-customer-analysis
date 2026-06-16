@@ -436,27 +436,35 @@ with tabs[1]:
         st.plotly_chart(fig, use_container_width=True)
 
     with r4:
+        # Lưu ý: 'Discount Applied' và 'Promo Code Used' trùng khớp 100% trong
+        # bộ dữ liệu (cùng một tín hiệu), nên chỉ hiển thị MỘT biểu đồ tác động.
         disc_grp = df.groupby("Discount Applied", observed=True)["Purchase Amount (USD)"].mean().reset_index()
         disc_grp["Discount Applied"] = disc_grp["Discount Applied"].astype(str)
         fig = px.bar(disc_grp, x="Discount Applied", y="Purchase Amount (USD)",
                      color="Discount Applied", color_discrete_sequence=[P1, PK1],
                      text_auto=True)
         fig.update_traces(texttemplate="$%{y:.2f}", marker_line_width=0)
-        fig = fig_layout(fig, "DISCOUNT IMPACT ON ORDER VALUE")
+        fig = fig_layout(fig, "DISCOUNT / PROMO IMPACT")
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
+        st.caption("Discount và Promo Code là cùng một tín hiệu (trùng 100%) → chỉ hiển thị một biểu đồ.")
 
     with r5:
-        promo_grp = df.groupby("Promo Code Used", observed=True)["Purchase Amount (USD)"].agg(
-            Mean="mean", Count="count").reset_index()
-        promo_grp["Promo Code Used"] = promo_grp["Promo Code Used"].astype(str)
-        fig = px.bar(promo_grp, x="Promo Code Used", y="Mean",
-                     color="Promo Code Used", color_discrete_sequence=[P3, PK3],
+        # Thay vì lặp lại Promo (trùng Discount), phơi bày cấu trúc ẩn:
+        # khuyến mãi được phân bổ cho ai? → tỷ lệ giảm giá theo giới tính.
+        df_dg = df.copy()
+        df_dg["_disc"] = (df_dg["Discount Applied"].astype(str) == "Yes").astype(int)
+        disc_gender = (df_dg.groupby("Gender", observed=True)["_disc"].mean() * 100).reset_index()
+        disc_gender.columns = ["Gender", "Discount Rate (%)"]
+        disc_gender["Gender"] = disc_gender["Gender"].astype(str)
+        fig = px.bar(disc_gender, x="Gender", y="Discount Rate (%)",
+                     color="Gender", color_discrete_sequence=[P3, PK3],
                      text_auto=True)
-        fig.update_traces(texttemplate="$%{y:.2f}", marker_line_width=0)
-        fig = fig_layout(fig, "PROMO CODE IMPACT")
+        fig.update_traces(texttemplate="%{y:.1f}%", marker_line_width=0)
+        fig = fig_layout(fig, "WHO GETS DISCOUNTS? (BY GENDER)")
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
+        st.caption("Phát hiện: khuyến mãi chỉ áp dụng cho nam giới — nữ giới 0%.")
 
     # Full-width heatmap
     st.markdown(f"<div class='section-title'>PAYMENT METHOD × CATEGORY</div>", unsafe_allow_html=True)
@@ -862,4 +870,3 @@ with tabs[5]:
         st.plotly_chart(fig, use_container_width=True)
 
     st.markdown(f"<div style='font-size:11px;color:{MUTED};text-align:center;margin-top:20px;'>Shopping Trends Analytics · FAA4021 · Built with Streamlit + Plotly</div>", unsafe_allow_html=True)
-
