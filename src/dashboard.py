@@ -336,14 +336,18 @@ with tabs[0]:
     ca, cb, cc = st.columns(3)
 
     with ca:
+        season_order = ["Spring", "Summer", "Fall", "Winter"]
         rev_s = df.groupby("Season", observed=True)["Purchase Amount (USD)"].sum().reset_index()
         rev_s["Season"] = rev_s["Season"].astype(str)
-        fig = px.bar(rev_s, x="Season", y="Purchase Amount (USD)",
-                     color="Season", color_discrete_sequence=PALETTE,
-                     text_auto=True)
-        fig.update_traces(texttemplate="$%{y:,.0f}", textposition="outside",
-                          textfont=dict(color=TEXT, size=10), marker_line_width=0)
-        fig = fig_layout(fig, "REVENUE BY SEASON")
+        rev_s["Season"] = pd.Categorical(rev_s["Season"], categories=season_order, ordered=True)
+        rev_s = rev_s.sort_values("Season")
+        fig = px.area(rev_s, x="Season", y="Purchase Amount (USD)",
+                      markers=True, color_discrete_sequence=[P1])
+        fig.update_traces(line=dict(color=P1, width=3), fillcolor="rgba(168,85,247,0.25)",
+                          marker=dict(size=9, color=PK1),
+                          texttemplate="$%{y:,.0f}", textposition="top center",
+                          textfont=dict(color=TEXT, size=10), mode="lines+markers+text")
+        fig = fig_layout(fig, "REVENUE BY SEASON (TREND)")
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -418,10 +422,13 @@ with tabs[1]:
     with r2:
         ship_rev = df.groupby("Shipping Type", observed=True)["Purchase Amount (USD)"].sum().reset_index()
         ship_rev["Shipping Type"] = ship_rev["Shipping Type"].astype(str)
-        fig = px.pie(ship_rev, values="Purchase Amount (USD)", names="Shipping Type",
-                     hole=0.55, color_discrete_sequence=PALETTE)
-        fig.update_traces(marker=dict(line=dict(color=BG, width=2)), textfont_color=TEXT)
+        ship_rev = ship_rev.sort_values("Purchase Amount (USD)", ascending=True)
+        fig = px.bar(ship_rev, x="Purchase Amount (USD)", y="Shipping Type",
+                     orientation="h", color="Purchase Amount (USD)",
+                     color_continuous_scale=[[0, P3], [0.5, P1], [1, PK1]], text_auto=True)
+        fig.update_traces(texttemplate="$%{x:,.0f}", marker_line_width=0)
         fig = fig_layout(fig, "REVENUE BY SHIPPING TYPE", height=460)
+        fig.update_layout(coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True)
 
     r3, r4, r5 = st.columns(3)
@@ -436,8 +443,8 @@ with tabs[1]:
         st.plotly_chart(fig, use_container_width=True)
 
     with r4:
-        # Lưu ý: 'Discount Applied' và 'Promo Code Used' trùng khớp 100% trong
-        # bộ dữ liệu (cùng một tín hiệu), nên chỉ hiển thị MỘT biểu đồ tác động.
+        # Discount Applied và Promo Code Used trùng khớp 100% (cùng một tín hiệu)
+        # → chỉ hiển thị MỘT biểu đồ tác động, tránh lặp lại vô nghĩa.
         disc_grp = df.groupby("Discount Applied", observed=True)["Purchase Amount (USD)"].mean().reset_index()
         disc_grp["Discount Applied"] = disc_grp["Discount Applied"].astype(str)
         fig = px.bar(disc_grp, x="Discount Applied", y="Purchase Amount (USD)",
@@ -447,24 +454,23 @@ with tabs[1]:
         fig = fig_layout(fig, "DISCOUNT / PROMO IMPACT")
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("Discount và Promo Code là cùng một tín hiệu (trùng 100%) → chỉ hiển thị một biểu đồ.")
+        st.caption("Discount ≡ Promo Code (trùng 100%) → gộp làm một biểu đồ.")
 
     with r5:
-        # Thay vì lặp lại Promo (trùng Discount), phơi bày cấu trúc ẩn:
-        # khuyến mãi được phân bổ cho ai? → tỷ lệ giảm giá theo giới tính.
+        # Thay biểu đồ Promo trùng lặp bằng phát hiện cấu trúc: AI được giảm giá?
         df_dg = df.copy()
         df_dg["_disc"] = (df_dg["Discount Applied"].astype(str) == "Yes").astype(int)
         disc_gender = (df_dg.groupby("Gender", observed=True)["_disc"].mean() * 100).reset_index()
         disc_gender.columns = ["Gender", "Discount Rate (%)"]
         disc_gender["Gender"] = disc_gender["Gender"].astype(str)
         fig = px.bar(disc_gender, x="Gender", y="Discount Rate (%)",
-                     color="Gender", color_discrete_sequence=[P3, PK3],
-                     text_auto=True)
-        fig.update_traces(texttemplate="%{y:.1f}%", marker_line_width=0)
+                     color="Gender", color_discrete_sequence=[P3, PK3], text_auto=True)
+        fig.update_traces(texttemplate="%{y:.1f}%", textposition="outside",
+                          cliponaxis=False, marker_line_width=0)
         fig = fig_layout(fig, "WHO GETS DISCOUNTS? (BY GENDER)")
-        fig.update_layout(showlegend=False)
+        fig.update_layout(showlegend=False, yaxis_range=[0, 75])
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("Phát hiện: khuyến mãi chỉ áp dụng cho nam giới — nữ giới 0%.")
+        st.caption("Phát hiện cấu trúc: khuyến mãi chỉ áp dụng cho nam — nữ giới 0%.")
 
     # Full-width heatmap
     st.markdown(f"<div class='section-title'>PAYMENT METHOD × CATEGORY</div>", unsafe_allow_html=True)
@@ -545,11 +551,15 @@ with tabs[2]:
                            labels=["1-5","6-15","16-30","31-50","50+"])
         prev_cnt = prev_bins.value_counts().reset_index()
         prev_cnt.columns = ["Purchases","Count"]
-        prev_cnt["Purchases"] = prev_cnt["Purchases"].astype(str)
-        fig = px.pie(prev_cnt, values="Count", names="Purchases",
-                     hole=0.55, color_discrete_sequence=PALETTE)
-        fig.update_traces(marker=dict(line=dict(color=BG, width=2)), textfont_color=TEXT)
+        prev_cnt["Purchases"] = pd.Categorical(prev_cnt["Purchases"].astype(str),
+                                               categories=["1-5","6-15","16-30","31-50","50+"], ordered=True)
+        prev_cnt = prev_cnt.sort_values("Purchases")
+        fig = px.bar(prev_cnt, x="Purchases", y="Count",
+                     color="Count", color_continuous_scale=[[0, P3], [0.5, P1], [1, PK1]],
+                     text_auto=True)
+        fig.update_traces(marker_line_width=0)
         fig = fig_layout(fig, "PREVIOUS PURCHASES DISTRIBUTION")
+        fig.update_layout(coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True)
 
     # Boxplot Purchase Amount — clean single color
@@ -659,6 +669,20 @@ with tabs[3]:
 # ══════════════════════════════════════════════════════════════
 with tabs[4]:
     st.markdown(f"<div class='section-title'>PREDICTIVE ANALYTICS</div>", unsafe_allow_html=True)
+
+    # Heatmap tương quan: trực quan hóa lý do mô hình dự báo thất bại.
+    # Nếu mọi |r| ≈ 0 thì không có tín hiệu tuyến tính để mô hình học.
+    st.markdown(f"<div class='section-title'>CORRELATION MATRIX (WHY MODELS STRUGGLE)</div>",
+                unsafe_allow_html=True)
+    num_cols = ["Age", "Purchase Amount (USD)", "Review Rating", "Previous Purchases"]
+    corr = df[num_cols].corr().round(3)
+    fig = px.imshow(corr, text_auto=True, aspect="auto",
+                    color_continuous_scale=[[0, P3], [0.5, "#1A1A2E"], [1, PK1]],
+                    zmin=-1, zmax=1)
+    fig = fig_layout(fig, "", height=340)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Mọi hệ số tương quan giữa các biến số đều ≈ 0 → giá trị đơn hàng gần như "
+               "độc lập với đặc điểm khách hàng, lý giải vì sao R² của cả 3 mô hình đều âm.")
 
     @st.cache_data
     def get_model_metrics():
