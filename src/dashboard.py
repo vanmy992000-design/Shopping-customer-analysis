@@ -217,28 +217,100 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ── DATA ────────────────────────────────────────────────────
-@st.cache_data
-def load_data():
-    df = pd.read_csv(DATA_PATH)
-    cats = ["Gender","Category","Location","Size","Color","Season",
-            "Subscription Status","Payment Method","Shipping Type",
-            "Discount Applied","Promo Code Used","Preferred Payment Method",
-            "Frequency of Purchases","Item Purchased"]
+# ── DATA HELPERS ─────────────────────────────────────────────
+# Các cột bắt buộc để dashboard hoạt động đúng
+REQUIRED_COLS = [
+    "Age", "Gender", "Category", "Purchase Amount (USD)", "Season",
+    "Review Rating", "Previous Purchases", "Subscription Status",
+    "Discount Applied", "Promo Code Used", "Payment Method",
+    "Shipping Type", "Location", "Size", "Color", "Item Purchased",
+    "Frequency of Purchases",
+]
+
+def process_df(df):
+    """Chuẩn hóa kiểu dữ liệu và tạo biến phái sinh Age Group."""
+    df = df.copy()
+    cats = ["Gender", "Category", "Location", "Size", "Color", "Season",
+            "Subscription Status", "Payment Method", "Shipping Type",
+            "Discount Applied", "Promo Code Used", "Preferred Payment Method",
+            "Frequency of Purchases", "Item Purchased"]
     for c in cats:
         if c in df.columns:
             df[c] = df[c].astype("category")
-    bins   = [0,18,25,35,45,55,100]
-    labels = ["<18","18-25","26-35","36-45","46-55","56+"]
-    df["Age Group"] = pd.cut(df["Age"], bins=bins, labels=labels, right=True)
+    if "Age" in df.columns:
+        bins   = [0, 18, 25, 35, 45, 55, 100]
+        labels = ["<18", "18-25", "26-35", "36-45", "46-55", "56+"]
+        df["Age Group"] = pd.cut(df["Age"], bins=bins, labels=labels, right=True)
     return df
 
-df_all = load_data()
+@st.cache_data
+def load_sample():
+    """Đọc bộ dữ liệu mẫu gốc."""
+    return process_df(pd.read_csv(DATA_PATH))
+
+def validate_columns(df):
+    """Trả về danh sách cột bắt buộc còn thiếu trong file tải lên."""
+    return [c for c in REQUIRED_COLS if c not in df.columns]
 
 
-# ── SIDEBAR ──────────────────────────────────────────────────
+# ── DATA SOURCE (cổng tải file) ──────────────────────────────
 with st.sidebar:
-    st.markdown(f"<div style='font-size:18px;font-weight:700;color:{TEXT};margin-bottom:20px;'>SHOPPING TRENDS</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:18px;font-weight:700;color:{TEXT};margin-bottom:16px;'>SHOPPING TRENDS</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:11px;letter-spacing:1px;color:{MUTED};text-transform:uppercase;margin-bottom:8px;'>Data Source</div>", unsafe_allow_html=True)
+    uploaded = st.file_uploader("Tải lên file CSV của bạn", type=["csv"],
+                                help="File cần có cùng cấu trúc với bộ dữ liệu Shopping Trends.")
+    use_sample = st.checkbox("Dùng dữ liệu mẫu", value=True,
+                             disabled=(uploaded is not None))
+
+# Xác định bộ dữ liệu đang hoạt động
+df_all = None
+source_name = ""
+if uploaded is not None:
+    try:
+        _raw = pd.read_csv(uploaded)
+    except Exception as e:
+        st.error(f"Không đọc được file: {e}")
+        st.stop()
+    _missing = validate_columns(_raw)
+    if _missing:
+        st.error("⚠️ File chưa đúng định dạng — thiếu các cột bắt buộc: "
+                 + ", ".join(_missing))
+        st.info("Vui lòng tải lên file CSV có cùng cấu trúc với bộ dữ liệu Shopping Trends "
+                "(gồm các cột: Age, Gender, Category, Purchase Amount (USD), Season, ...).")
+        st.stop()
+    df_all = process_df(_raw)
+    source_name = f"📤 {uploaded.name}  ({len(df_all):,} dòng)"
+elif use_sample and os.path.exists(DATA_PATH):
+    df_all = load_sample()
+    source_name = f"📁 Dữ liệu mẫu  ({len(df_all):,} dòng)"
+else:
+    # Màn hình chào — chưa có dữ liệu thì chưa hiện dashboard
+    st.markdown(f"""
+    <div style='max-width:640px;margin:80px auto;text-align:center;
+                background:{CARD_BG};border:1px solid {BORDER};
+                border-top:4px solid {P1};border-radius:16px;padding:48px 40px;'>
+      <div style='font-size:30px;font-weight:700;color:{TEXT};margin-bottom:12px;'>
+        📊 Shopping Trends Analytics
+      </div>
+      <div style='font-size:15px;color:{MUTED};line-height:1.7;margin-bottom:8px;'>
+        Chào mừng bạn! Để bắt đầu phân tích, hãy chọn một nguồn dữ liệu ở thanh bên trái:
+      </div>
+      <div style='font-size:14px;color:{TEXT};line-height:1.9;text-align:left;
+                  max-width:420px;margin:20px auto 0;'>
+        &nbsp;&nbsp;①&nbsp; <b>Tải lên file CSV</b> của riêng bạn, hoặc<br>
+        &nbsp;&nbsp;②&nbsp; Tích chọn <b>"Dùng dữ liệu mẫu"</b> để xem demo.
+      </div>
+      <div style='font-size:12px;color:{MUTED};margin-top:24px;'>
+        File tải lên cần cùng cấu trúc với bộ dữ liệu Shopping Trends.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+
+# ── SIDEBAR FILTERS ──────────────────────────────────────────
+with st.sidebar:
+    st.markdown(f"<div style='font-size:11px;color:{P2};margin:4px 0 14px;'>{source_name}</div>", unsafe_allow_html=True)
     st.markdown(f"<div style='font-size:11px;letter-spacing:1px;color:{MUTED};text-transform:uppercase;margin-bottom:12px;'>Filters</div>", unsafe_allow_html=True)
 
     seasons    = ["All"] + sorted(df_all["Season"].astype(str).unique().tolist())
@@ -336,18 +408,14 @@ with tabs[0]:
     ca, cb, cc = st.columns(3)
 
     with ca:
-        season_order = ["Spring", "Summer", "Fall", "Winter"]
         rev_s = df.groupby("Season", observed=True)["Purchase Amount (USD)"].sum().reset_index()
         rev_s["Season"] = rev_s["Season"].astype(str)
-        rev_s["Season"] = pd.Categorical(rev_s["Season"], categories=season_order, ordered=True)
-        rev_s = rev_s.sort_values("Season")
-        fig = px.area(rev_s, x="Season", y="Purchase Amount (USD)",
-                      markers=True, color_discrete_sequence=[P1])
-        fig.update_traces(line=dict(color=P1, width=3), fillcolor="rgba(168,85,247,0.25)",
-                          marker=dict(size=9, color=PK1),
-                          texttemplate="$%{y:,.0f}", textposition="top center",
-                          textfont=dict(color=TEXT, size=10), mode="lines+markers+text")
-        fig = fig_layout(fig, "REVENUE BY SEASON (TREND)")
+        fig = px.bar(rev_s, x="Season", y="Purchase Amount (USD)",
+                     color="Season", color_discrete_sequence=PALETTE,
+                     text_auto=True)
+        fig.update_traces(texttemplate="$%{y:,.0f}", textposition="outside",
+                          textfont=dict(color=TEXT, size=10), marker_line_width=0)
+        fig = fig_layout(fig, "REVENUE BY SEASON")
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -422,13 +490,10 @@ with tabs[1]:
     with r2:
         ship_rev = df.groupby("Shipping Type", observed=True)["Purchase Amount (USD)"].sum().reset_index()
         ship_rev["Shipping Type"] = ship_rev["Shipping Type"].astype(str)
-        ship_rev = ship_rev.sort_values("Purchase Amount (USD)", ascending=True)
-        fig = px.bar(ship_rev, x="Purchase Amount (USD)", y="Shipping Type",
-                     orientation="h", color="Purchase Amount (USD)",
-                     color_continuous_scale=[[0, P3], [0.5, P1], [1, PK1]], text_auto=True)
-        fig.update_traces(texttemplate="$%{x:,.0f}", marker_line_width=0)
+        fig = px.pie(ship_rev, values="Purchase Amount (USD)", names="Shipping Type",
+                     hole=0.55, color_discrete_sequence=PALETTE)
+        fig.update_traces(marker=dict(line=dict(color=BG, width=2)), textfont_color=TEXT)
         fig = fig_layout(fig, "REVENUE BY SHIPPING TYPE", height=460)
-        fig.update_layout(coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True)
 
     r3, r4, r5 = st.columns(3)
@@ -443,34 +508,27 @@ with tabs[1]:
         st.plotly_chart(fig, use_container_width=True)
 
     with r4:
-        # Discount Applied và Promo Code Used trùng khớp 100% (cùng một tín hiệu)
-        # → chỉ hiển thị MỘT biểu đồ tác động, tránh lặp lại vô nghĩa.
         disc_grp = df.groupby("Discount Applied", observed=True)["Purchase Amount (USD)"].mean().reset_index()
         disc_grp["Discount Applied"] = disc_grp["Discount Applied"].astype(str)
         fig = px.bar(disc_grp, x="Discount Applied", y="Purchase Amount (USD)",
                      color="Discount Applied", color_discrete_sequence=[P1, PK1],
                      text_auto=True)
         fig.update_traces(texttemplate="$%{y:.2f}", marker_line_width=0)
-        fig = fig_layout(fig, "DISCOUNT / PROMO IMPACT")
+        fig = fig_layout(fig, "DISCOUNT IMPACT ON ORDER VALUE")
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("Discount ≡ Promo Code (trùng 100%) → gộp làm một biểu đồ.")
 
     with r5:
-        # Thay biểu đồ Promo trùng lặp bằng phát hiện cấu trúc: AI được giảm giá?
-        df_dg = df.copy()
-        df_dg["_disc"] = (df_dg["Discount Applied"].astype(str) == "Yes").astype(int)
-        disc_gender = (df_dg.groupby("Gender", observed=True)["_disc"].mean() * 100).reset_index()
-        disc_gender.columns = ["Gender", "Discount Rate (%)"]
-        disc_gender["Gender"] = disc_gender["Gender"].astype(str)
-        fig = px.bar(disc_gender, x="Gender", y="Discount Rate (%)",
-                     color="Gender", color_discrete_sequence=[P3, PK3], text_auto=True)
-        fig.update_traces(texttemplate="%{y:.1f}%", textposition="outside",
-                          cliponaxis=False, marker_line_width=0)
-        fig = fig_layout(fig, "WHO GETS DISCOUNTS? (BY GENDER)")
-        fig.update_layout(showlegend=False, yaxis_range=[0, 75])
+        promo_grp = df.groupby("Promo Code Used", observed=True)["Purchase Amount (USD)"].agg(
+            Mean="mean", Count="count").reset_index()
+        promo_grp["Promo Code Used"] = promo_grp["Promo Code Used"].astype(str)
+        fig = px.bar(promo_grp, x="Promo Code Used", y="Mean",
+                     color="Promo Code Used", color_discrete_sequence=[P3, PK3],
+                     text_auto=True)
+        fig.update_traces(texttemplate="$%{y:.2f}", marker_line_width=0)
+        fig = fig_layout(fig, "PROMO CODE IMPACT")
+        fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("Phát hiện cấu trúc: khuyến mãi chỉ áp dụng cho nam — nữ giới 0%.")
 
     # Full-width heatmap
     st.markdown(f"<div class='section-title'>PAYMENT METHOD × CATEGORY</div>", unsafe_allow_html=True)
@@ -551,15 +609,11 @@ with tabs[2]:
                            labels=["1-5","6-15","16-30","31-50","50+"])
         prev_cnt = prev_bins.value_counts().reset_index()
         prev_cnt.columns = ["Purchases","Count"]
-        prev_cnt["Purchases"] = pd.Categorical(prev_cnt["Purchases"].astype(str),
-                                               categories=["1-5","6-15","16-30","31-50","50+"], ordered=True)
-        prev_cnt = prev_cnt.sort_values("Purchases")
-        fig = px.bar(prev_cnt, x="Purchases", y="Count",
-                     color="Count", color_continuous_scale=[[0, P3], [0.5, P1], [1, PK1]],
-                     text_auto=True)
-        fig.update_traces(marker_line_width=0)
+        prev_cnt["Purchases"] = prev_cnt["Purchases"].astype(str)
+        fig = px.pie(prev_cnt, values="Count", names="Purchases",
+                     hole=0.55, color_discrete_sequence=PALETTE)
+        fig.update_traces(marker=dict(line=dict(color=BG, width=2)), textfont_color=TEXT)
         fig = fig_layout(fig, "PREVIOUS PURCHASES DISTRIBUTION")
-        fig.update_layout(coloraxis_showscale=False)
         st.plotly_chart(fig, use_container_width=True)
 
     # Boxplot Purchase Amount — clean single color
@@ -670,22 +724,8 @@ with tabs[3]:
 with tabs[4]:
     st.markdown(f"<div class='section-title'>PREDICTIVE ANALYTICS</div>", unsafe_allow_html=True)
 
-    # Heatmap tương quan: trực quan hóa lý do mô hình dự báo thất bại.
-    # Nếu mọi |r| ≈ 0 thì không có tín hiệu tuyến tính để mô hình học.
-    st.markdown(f"<div class='section-title'>CORRELATION MATRIX (WHY MODELS STRUGGLE)</div>",
-                unsafe_allow_html=True)
-    num_cols = ["Age", "Purchase Amount (USD)", "Review Rating", "Previous Purchases"]
-    corr = df[num_cols].corr().round(3)
-    fig = px.imshow(corr, text_auto=True, aspect="auto",
-                    color_continuous_scale=[[0, P3], [0.5, "#1A1A2E"], [1, PK1]],
-                    zmin=-1, zmax=1)
-    fig = fig_layout(fig, "", height=340)
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption("Mọi hệ số tương quan giữa các biến số đều ≈ 0 → giá trị đơn hàng gần như "
-               "độc lập với đặc điểm khách hàng, lý giải vì sao R² của cả 3 mô hình đều âm.")
-
     @st.cache_data
-    def get_model_metrics():
+    def get_model_metrics(df_source):
         import warnings, numpy as np
         warnings.filterwarnings("ignore")
         from sklearn.model_selection import train_test_split
@@ -693,7 +733,7 @@ with tabs[4]:
         from sklearn.ensemble import RandomForestRegressor
         from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-        df_m = pd.read_csv(DATA_PATH)
+        df_m = df_source.copy()
         for col, mapping in [("Subscription Status",{"Yes":1,"No":0}),
                               ("Discount Applied",   {"Yes":1,"No":0}),
                               ("Promo Code Used",    {"Yes":1,"No":0})]:
@@ -744,7 +784,7 @@ with tabs[4]:
         return results, metrics_df, importances
 
     with st.spinner("Loading model results..."):
-        all_results, metrics_df, importances = get_model_metrics()
+        all_results, metrics_df, importances = get_model_metrics(df_all)
 
     mc1, mc2 = st.columns(2)
     with mc1:
